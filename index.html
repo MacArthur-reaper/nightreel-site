@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NightReel – find free films, cartoons and old TV</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Hanken+Grotesk:wght@400;600&display=swap">
+<style>
+:root{--bg:#0d0e10;--ink:#e9ecee;--mute:#9aa1a7;--line:#2a2d31;--eye:#f2f4f5;--blood:#7a1f1f;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#0d0e10}} /* site is intentionally dark */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Hanken Grotesk",system-ui,sans-serif}
+.hero{position:relative;min-height:78vh;display:flex;flex-direction:column;justify-content:flex-end;
+  padding:32px clamp(16px,5vw,64px);background:linear-gradient(#0d0e1000 35%,#0d0e10 98%),url("hero.png") center 30%/cover no-repeat}
+h1{font:800 clamp(48px,11vw,140px)/.9 "Big Shoulders Display",Impact,sans-serif;margin:0 0 12px;letter-spacing:.01em}
+.hero p{max-width:52ch;color:var(--mute);margin:0 0 24px}
+form.search{display:flex;gap:8px;max-width:720px}
+input[type=text],input[type=email]{flex:1;min-width:0;padding:14px 16px;border:1px solid var(--line);background:#14161aee;color:var(--ink);font:inherit;border-radius:4px}
+button{padding:14px 22px;border:0;background:var(--eye);color:#111;font:600 16px "Hanken Grotesk",sans-serif;border-radius:4px;cursor:pointer}
+button:hover{background:#fff}
+:focus-visible{outline:2px solid var(--eye);outline-offset:2px}
+main{max-width:900px;margin:0 auto;padding:32px clamp(16px,5vw,64px) 24px}
+#msg{color:var(--mute);min-height:1.5em}
+#msg.err{color:#ff8a80}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line)}
+li span.t{overflow-wrap:anywhere}
+li small{color:var(--mute);display:block}
+li button{background:transparent;color:var(--ink);border:1px solid var(--ink);padding:10px 16px;white-space:nowrap}
+li button:hover{background:var(--ink);color:#111}
+.get{border-top:1px solid var(--line);margin-top:40px;padding-top:24px;color:var(--mute)}
+.get a{color:var(--ink)}
+form.reg{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;max-width:560px}
+form.reg label{flex-basis:100%;font-size:14px;color:var(--mute)}
+footer{max-width:900px;margin:0 auto;padding:0 clamp(16px,5vw,64px) 40px;color:var(--mute);font-size:13px}
+@media (prefers-reduced-motion:no-preference){.hero{animation:fade .8s ease-out}@keyframes fade{from{opacity:0}to{opacity:1}}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>NightReel</h1>
+  <p>Search free-to-download films, cartoons and old TV from the Internet Archive. Pick a title and our app saves it straight to your computer.</p>
+  <form class="search" id="sf">
+    <input type="text" id="q" placeholder="Try: nosferatu, betty boop, night of the living dead" aria-label="Search" required>
+    <button type="submit">Search</button>
+  </form>
+</header>
+
+<main>
+  <p id="msg" role="status"></p>
+  <ul id="results"></ul>
+
+  <section class="get">
+    <p><strong>Get the download app.</strong> It opens when you press “Download with app” and saves files only on your computer. <a href="downloader_app.exe" download>Download for Windows</a></p>
+    <form class="reg" id="rf">
+      <label for="em">Get an email when new sources are added</label>
+      <input type="email" id="em" placeholder="you@example.com" required>
+      <button type="submit">Register</button>
+      <label><input type="checkbox" id="ok" required> I agree to be emailed and to the activity log described below.</label>
+    </form>
+    <p id="rmsg" role="status"></p>
+  </section>
+</main>
+<footer>
+  To keep the service safe we log the time, your IP address and your search terms. We never store the files you download.
+  Visits through VPNs or proxies are blocked.
+</footer>
+
+<script>
+  const API = "https://nightreel-backend.onrender.com"; // <- put your backend address here
+const $ = id => document.getElementById(id);
+const say = (el, text, err) => { el.textContent = text; el.className = err ? "err" : ""; };
+
+async function call(path, opts) {
+  const r = await fetch(API + path, opts);
+  if (r.status === 403) throw new Error("VPN or proxy detected. Turn it off and try again.");
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Something went wrong. Try again.");
+  return r.json();
+}
+
+$("sf").onsubmit = async e => {
+  e.preventDefault();
+  const list = $("results"); list.innerHTML = "";
+  say($("msg"), "Searching…");
+  try {
+    const data = await call("/search?q=" + encodeURIComponent($("q").value.trim()));
+    say($("msg"), data.results.length ? data.results.length + " results" : "No results. Try another title.");
+    for (const it of data.results) {
+      const li = document.createElement("li");
+      const left = document.createElement("span"); left.className = "t";
+      left.textContent = it.title;
+      const sm = document.createElement("small"); sm.textContent = it.year || "";
+      left.appendChild(sm);
+      const b = document.createElement("button"); b.textContent = "Download with app";
+      b.onclick = () => grab(it.id, b);
+      li.append(left, b); list.appendChild(li);
+    }
+  } catch (err) { say($("msg"), err.message, true); }
+};
+
+async function grab(id, btn) {
+  btn.disabled = true;
+  try {
+    const d = await call("/resolve?id=" + encodeURIComponent(id));
+    window.location.href = "mydl://download?url=" + encodeURIComponent(d.url);  // opens the app
+    say($("msg"), "Opening the app… if nothing happens, install the app first.");
+  } catch (err) { say($("msg"), err.message, true); }
+  btn.disabled = false;
+}
+
+$("rf").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    await call("/register", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("em").value.trim(), consent: $("ok").checked }) });
+    say($("rmsg"), "Registered. Thank you!");
+  } catch (err) { say($("rmsg"), err.message, true); }
+};
+</script>
+</body>
+</html>
